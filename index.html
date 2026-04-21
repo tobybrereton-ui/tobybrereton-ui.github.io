@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Portfolio Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: -apple-system, Arial, sans-serif;
+            background-color: #0f172a;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+        }
+        h1 {
+            font-size: 22px;
+            margin-bottom: 16px;
+        }
+        button {
+            width: 92%;
+            padding: 15px;
+            font-size: 18px;
+            border-radius: 10px;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            margin-top: 10px;
+        }
+        .card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 14px;
+            margin: 12px auto;
+            width: 92%;
+            box-sizing: border-box;
+            text-align: left;
+        }
+        .label {
+            color: #cbd5e1;
+            font-size: 14px;
+        }
+        .value {
+            font-size: 22px;
+            font-weight: 700;
+            margin-top: 4px;
+        }
+        #result, #allocation {
+            margin-top: 14px;
+            font-size: 18px;
+            padding: 14px;
+            border-radius: 12px;
+            width: 92%;
+            margin-left: auto;
+            margin-right: auto;
+            box-sizing: border-box;
+        }
+        .small {
+            font-size: 13px;
+            color: #cbd5e1;
+            width: 92%;
+            margin: 12px auto 0;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+
+<h1>📊 Weekly Check</h1>
+
+<button onclick="loadData()">Refresh from Google Sheet</button>
+
+<div class="card"><div class="label">S&P 500</div><div class="value" id="spx">-</div></div>
+<div class="card"><div class="label">50DMA</div><div class="value" id="dma50">-</div></div>
+<div class="card"><div class="label">200DMA</div><div class="value" id="dma200">-</div></div>
+<div class="card"><div class="label">VIX</div><div class="value" id="vix">-</div></div>
+<div class="card"><div class="label">10Y Yield</div><div class="value" id="yieldNow">-</div></div>
+<div class="card"><div class="label">Inflation</div><div class="value" id="inflation">-</div></div>
+
+<div id="result"></div>
+<div id="allocation"></div>
+
+<div class="small">
+Gold rules: VIX 25–30 = 5%, 30–40 = 10%, above 40 = 15%, only if S&P is below 50DMA.<br>
+Commodities rules: 5% / 10% / 15% based on inflation pressure, only if yield is up, inflation is high, and S&P is below 200DMA.
+</div>
+
+<script>
+const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRff4BnZ-3xT-o2y3VOMwfDelAce12LkIZrFOr95Rh5mcJl3rGKOFv_RLVbfW-JW_Gn7ByggNdQnS3w/pub?gid=0&single=true&output=csv";
+
+function parseCSV(text) {
+    return text.trim().split("\n").map(row => row.split(","));
+}
+
+function num(x) {
+    return parseFloat(String(x).replace(/"/g, "").replace(/,/g, "").trim());
+}
+
+function goldAllocation(vix) {
+    if (vix > 40) return 15;
+    if (vix >= 30) return 10;
+    if (vix >= 25) return 5;
+    return 0;
+}
+
+function commodityAllocation(inflation) {
+    if (inflation > 5) return 15;
+    if (inflation > 3) return 10;
+    return 5;
+}
+
+async function loadData() {
+    const resultBox = document.getElementById("result");
+    const allocationBox = document.getElementById("allocation");
+
+    try {
+        const response = await fetch(csvUrl);
+        const text = await response.text();
+        const rows = parseCSV(text);
+
+        // Expecting:
+        // row 1 = headers
+        // row 2 = S&P price
+        // row 3 = 50DMA
+        // row 4 = 200DMA
+        // row 5 = VIX
+        // row 6 = 10Y now
+        // row 7 = Inflation
+        // row 8 = 10Y one month ago
+
+        const spx = num(rows[1][1]);
+        const dma50 = num(rows[2][1]);
+        const dma200 = num(rows[3][1]);
+        const vix = num(rows[4][1]);
+        const yieldNow = num(rows[5][1]);
+        const inflation = num(rows[6][1]);
+        const yieldMonthAgo = num(rows[7][1]);
+
+        document.getElementById("spx").textContent = spx.toFixed(2);
+        document.getElementById("dma50").textContent = dma50.toFixed(2);
+        document.getElementById("dma200").textContent = dma200.toFixed(2);
+        document.getElementById("vix").textContent = vix.toFixed(2);
+        document.getElementById("yieldNow").textContent = yieldNow.toFixed(2);
+        document.getElementById("inflation").textContent = inflation.toFixed(1) + "%";
+
+        const below50 = spx < dma50;
+        const below200 = spx < dma200;
+        const yieldUp = yieldNow > yieldMonthAgo;
+        const inflationHigh = inflation > 3;
+
+        const crisisTriggered = vix >= 25 && below50;
+        const inflationTriggered = yieldUp && inflationHigh && below200;
+
+        const gold = crisisTriggered ? goldAllocation(vix) : 0;
+        const commodities = inflationTriggered ? commodityAllocation(inflation) : 0;
+
+        if (crisisTriggered && !inflationTriggered) {
+            resultBox.innerHTML = "🔴 CRISIS REGIME";
+            resultBox.style.background = "#7f1d1d";
+            allocationBox.innerHTML = `Gold overlay: <b>${gold}%</b><br>Commodities overlay: <b>0%</b>`;
+            allocationBox.style.background = "#450a0a";
+        } else if (!crisisTriggered && inflationTriggered) {
+            resultBox.innerHTML = "🟠 INFLATION REGIME";
+            resultBox.style.background = "#9a3412";
+            allocationBox.innerHTML = `Gold overlay: <b>0%</b><br>Commodities overlay: <b>${commodities}%</b>`;
+            allocationBox.style.background = "#431407";
+        } else if (crisisTriggered && inflationTriggered) {
+            const total = Math.min(15, gold + commodities);
+            const half = (total / 2).toFixed(1);
+            resultBox.innerHTML = "🟡 BOTH REGIMES TRIGGERED";
+            resultBox.style.background = "#854d0e";
+            allocationBox.innerHTML = `Gold: <b>${half}%</b><br>Commodities: <b>${half}%</b><br>Total overlay cap: <b>${total}%</b>`;
+            allocationBox.style.background = "#422006";
+        } else {
+            resultBox.innerHTML = "🟢 NORMAL REGIME";
+            resultBox.style.background = "#065f46";
+            allocationBox.innerHTML = `Gold overlay: <b>0%</b><br>Commodities overlay: <b>0%</b>`;
+            allocationBox.style.background = "#064e3b";
+        }
+
+    } catch (e) {
+        resultBox.innerHTML = "Could not load the Google Sheet. Check the published CSV link.";
+        resultBox.style.background = "#7f1d1d";
+        allocationBox.innerHTML = "";
+        allocationBox.style.background = "transparent";
+    }
+}
+
+// Optional: auto-load on open
+loadData();
+</script>
+
+</body>
+</html>
