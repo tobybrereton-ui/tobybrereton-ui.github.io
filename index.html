@@ -132,8 +132,8 @@ async function loadData() {
         const dma200 = num(rows[3][1]);
         const vix = num(rows[4][1]);
         const yieldNow = num(rows[5][1]);
-        const inflation = num(rows[6][1]);
-        const yieldMonthAgo = num(rows[7][1]);
+const inflation = num(rows[6][1]);
+const yieldTrendText = String(rows[7][1]).replace(/"/g, "").trim();
 
         document.getElementById("spx").textContent = spx.toFixed(2);
         document.getElementById("dma50").textContent = dma50.toFixed(2);
@@ -144,7 +144,7 @@ async function loadData() {
 
         const below50 = spx < dma50;
         const below200 = spx < dma200;
-        const yieldUp = yieldNow > yieldMonthAgo;
+        const yieldUp = yieldTrendText === "Up";
         const inflationHigh = inflation > 3;
 
         const crisisTriggered = vix >= 25 && below50;
