@@ -62,6 +62,14 @@
             text-align: left;
             line-height: 1.4;
         }
+@keyframes flashUpdate {
+    0% { box-shadow: 0 0 0 rgba(34,197,94,0); }
+    25% { box-shadow: 0 0 18px rgba(34,197,94,0.9); }
+    100% { box-shadow: 0 0 0 rgba(34,197,94,0); }
+}
+.flash-update {
+    animation: flashUpdate 1.2s ease-out;
+}
     </style>
 </head>
 <body>
@@ -80,6 +88,7 @@
 <div id="result"></div>
 <div id="allocation"></div>
 <div id="equityLayer"></div>
+<div id="lastUpdated" class="small"></div>
 
 <script>
 const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRff4BnZ-3xT-o2y3VOMwfDelAce12LkIZrFOr95Rh5mcJl3rGKOFv_RLVbfW-JW_Gn7ByggNdQnS3w/pub?gid=0&single=true&output=csv";
@@ -137,6 +146,25 @@ async function loadData() {
         document.getElementById("inflation").textContent = isNaN(inflation) ? "-" : inflation.toFixed(1) + "%";
         document.getElementById("yieldTrend").textContent = yieldTrendText || "-";
 
+const now = new Date();
+const lastUpdatedEl = document.getElementById("lastUpdated");
+
+// store timestamp
+window.lastUpdateTime = now;
+
+// display text
+lastUpdatedEl.textContent = "Last updated: " + now.toLocaleTimeString();
+
+// reset style (fresh)
+lastUpdatedEl.style.background = "#064e3b";
+lastUpdatedEl.style.color = "white";
+lastUpdatedEl.style.padding = "8px";
+lastUpdatedEl.style.borderRadius = "8px";
+
+// flash to confirm refresh
+document.body.classList.remove("flash-update");
+void document.body.offsetWidth; // restart animation
+document.body.classList.add("flash-update");
         const below50 = spx < dma50;
         const below200 = spx < dma200;
         const yieldUp = yieldTrendText === "Up";
@@ -192,7 +220,30 @@ async function loadData() {
         equityBox.innerHTML = "";
         equityBox.style.background = "transparent";
     }
+}function checkStaleness() {
+    if (!window.lastUpdateTime) return;
+
+    const now = new Date();
+    const diffMinutes = (now - window.lastUpdateTime) / 60000;
+
+    const el = document.getElementById("lastUpdated");
+
+    if (diffMinutes > 30) {
+        // 🔴 stale
+        el.style.background = "#7f1d1d";
+        el.textContent = "⚠ Data stale (" + Math.floor(diffMinutes) + " mins)";
+    } else if (diffMinutes > 10) {
+        // 🟠 warning
+        el.style.background = "#92400e";
+        el.textContent = "Data aging (" + Math.floor(diffMinutes) + " mins)";
+    } else {
+        // 🟢 fresh
+        el.style.background = "#064e3b";
+    }
 }
+window.onload = loadData;
+setInterval(checkStaleness, 60000);
+
 </script>
 
 </body>
