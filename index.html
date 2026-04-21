@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Portfolio Dashboard</title>
+    <title>Portfolio Dashboard - Final System</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body {
@@ -44,7 +44,7 @@
             font-weight: 700;
             margin-top: 4px;
         }
-        #result, #allocation {
+        #result, #allocation, #equityLayer {
             margin-top: 14px;
             font-size: 18px;
             padding: 14px;
@@ -60,13 +60,13 @@
             width: 92%;
             margin: 12px auto 0;
             text-align: left;
+            line-height: 1.4;
         }
     </style>
 </head>
 <body>
 
 <h1>📊 Weekly Check</h1>
-
 <button onclick="loadData()">Refresh from Google Sheet</button>
 
 <div class="card"><div class="label">S&P 500</div><div class="value" id="spx">-</div></div>
@@ -75,13 +75,15 @@
 <div class="card"><div class="label">VIX</div><div class="value" id="vix">-</div></div>
 <div class="card"><div class="label">10Y Yield</div><div class="value" id="yieldNow">-</div></div>
 <div class="card"><div class="label">Inflation</div><div class="value" id="inflation">-</div></div>
+<div class="card"><div class="label">Yield Trend</div><div class="value" id="yieldTrend">-</div></div>
 
 <div id="result"></div>
 <div id="allocation"></div>
+<div id="equityLayer"></div>
 
 <div class="small">
-Gold rules: VIX 25–30 = 5%, 30–40 = 10%, above 40 = 15%, only if S&P is below 50DMA.<br>
-Commodities rules: 5% / 10% / 15% based on inflation pressure, only if yield is up, inflation is high, and S&P is below 200DMA.
+Replace <b>YOUR_CSV_URL_HERE</b> below with your published Google Sheet CSV link.<br>
+Expected sheet rows after header: S&amp;P Price, 50DMA, 200DMA, VIX, 10Y Yield, Inflation, Yield Trend.
 </div>
 
 <script>
@@ -108,39 +110,37 @@ function commodityAllocation(inflation) {
     return 5;
 }
 
+function equityTarget(vix, below50, below200) {
+    if (vix > 45 && below50 && below200) return "80% to 85%";
+    if (vix > 35 && below50 && below200) return "90%";
+    return "100%";
+}
+
 async function loadData() {
     const resultBox = document.getElementById("result");
     const allocationBox = document.getElementById("allocation");
+    const equityBox = document.getElementById("equityLayer");
 
     try {
-        const response = await fetch(csvUrl);
+        const response = await fetch(csvUrl, {cache: "no-store"});
         const text = await response.text();
         const rows = parseCSV(text);
-
-        // Expecting:
-        // row 1 = headers
-        // row 2 = S&P price
-        // row 3 = 50DMA
-        // row 4 = 200DMA
-        // row 5 = VIX
-        // row 6 = 10Y now
-        // row 7 = Inflation
-        // row 8 = 10Y one month ago
 
         const spx = num(rows[1][1]);
         const dma50 = num(rows[2][1]);
         const dma200 = num(rows[3][1]);
         const vix = num(rows[4][1]);
         const yieldNow = num(rows[5][1]);
-const inflation = num(rows[6][1]);
-const yieldTrendText = String(rows[7][1]).replace(/"/g, "").trim();
+        const inflation = num(rows[6][1]);
+        const yieldTrendText = String(rows[7][1]).replace(/"/g, "").trim();
 
-        document.getElementById("spx").textContent = spx.toFixed(2);
-        document.getElementById("dma50").textContent = dma50.toFixed(2);
-        document.getElementById("dma200").textContent = dma200.toFixed(2);
-        document.getElementById("vix").textContent = vix.toFixed(2);
-        document.getElementById("yieldNow").textContent = yieldNow.toFixed(2);
-        document.getElementById("inflation").textContent = inflation.toFixed(1) + "%";
+        document.getElementById("spx").textContent = isNaN(spx) ? "-" : spx.toFixed(2);
+        document.getElementById("dma50").textContent = isNaN(dma50) ? "-" : dma50.toFixed(2);
+        document.getElementById("dma200").textContent = isNaN(dma200) ? "-" : dma200.toFixed(2);
+        document.getElementById("vix").textContent = isNaN(vix) ? "-" : vix.toFixed(2);
+        document.getElementById("yieldNow").textContent = isNaN(yieldNow) ? "-" : yieldNow.toFixed(2);
+        document.getElementById("inflation").textContent = isNaN(inflation) ? "-" : inflation.toFixed(1) + "%";
+        document.getElementById("yieldTrend").textContent = yieldTrendText || "-";
 
         const below50 = spx < dma50;
         const below200 = spx < dma200;
@@ -152,6 +152,7 @@ const yieldTrendText = String(rows[7][1]).replace(/"/g, "").trim();
 
         const gold = crisisTriggered ? goldAllocation(vix) : 0;
         const commodities = inflationTriggered ? commodityAllocation(inflation) : 0;
+        const equityLevel = equityTarget(vix, below50, below200);
 
         if (crisisTriggered && !inflationTriggered) {
             resultBox.innerHTML = "🔴 CRISIS REGIME";
@@ -177,16 +178,26 @@ const yieldTrendText = String(rows[7][1]).replace(/"/g, "").trim();
             allocationBox.style.background = "#064e3b";
         }
 
+        if (equityLevel === "100%") {
+            equityBox.innerHTML = "Equity layer: <b>100%</b> - no equity reduction";
+            equityBox.style.background = "#0f766e";
+        } else if (equityLevel === "90%") {
+            equityBox.innerHTML = "Equity layer: <b>90%</b> - trim equities proportionally and hold the residual in cash / money market";
+            equityBox.style.background = "#92400e";
+        } else {
+            equityBox.innerHTML = "Equity layer: <b>80% to 85%</b> - extreme stress regime; trim equities proportionally and hold the residual in cash / money market";
+            equityBox.style.background = "#7f1d1d";
+        }
+
     } catch (e) {
         resultBox.innerHTML = "Could not load the Google Sheet. Check the published CSV link.";
         resultBox.style.background = "#7f1d1d";
         allocationBox.innerHTML = "";
         allocationBox.style.background = "transparent";
+        equityBox.innerHTML = "";
+        equityBox.style.background = "transparent";
     }
 }
-
-// Optional: auto-load on open
-loadData();
 </script>
 
 </body>
